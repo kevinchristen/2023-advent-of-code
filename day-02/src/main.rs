@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 struct CubeCounts {
     red: usize,
     green: usize,
@@ -30,6 +30,12 @@ impl CubeCounts {
             green: count["green"],
             blue: count["blue"],
         }
+    }
+
+    fn power(self: &CubeCounts) -> usize {
+        let power = self.red * self.green * self.blue;
+        println!("{:?}: {}", self, power);
+        power
     }
 }
 
@@ -84,15 +90,40 @@ impl Game {
         )
         .expect("Parse id from game name")
     }
+
+    fn smallest_bag(self: &Game) -> CubeCounts {
+        let mut acc = CubeCounts {
+            red: 0,
+            green: 0,
+            blue: 0,
+        };
+        let smallest = self.sample_counts.iter().fold(acc, |lhs, rhs| {
+            acc.red = rhs.red.max(lhs.red);
+            acc.green = rhs.green.max(lhs.green);
+            acc.blue = rhs.blue.max(lhs.blue);
+            return acc;
+        });
+        smallest
+    }
 }
 
 fn main() {
-    let games = io::stdin()
+    // let games = io::stdin()
+    //     .lines()
+    //     .map(|l| Game::parse_game(&l.expect("Parse game")))
+    //     .filter(|g| g.is_possible());
+    // let sum = games.fold(0, |acc, i| acc + i.get_game_id());
+    // println!("sum is {sum}");
+
+    let sum_of_powers = io::stdin()
         .lines()
-        .map(|l| Game::parse_game(&l.expect("Parse game")))
-        .filter(|g| g.is_possible());
-    let sum = games.fold(0, |acc, i| acc + i.get_game_id());
-    println!("sum is {sum}");
+        .map(|l| {
+            Game::parse_game(&l.expect("Parse game"))
+                .smallest_bag()
+                .power()
+        })
+        .fold(0, |acc, p| acc + p);
+    println!("sum of powers: {sum_of_powers}");
 }
 
 #[test]
@@ -125,5 +156,30 @@ fn test_parse_line() {
             blue: 8,
         },
         game.sample_counts[2]
+    );
+}
+
+#[test]
+fn test_power() {
+    assert_eq!(
+        48,
+        CubeCounts {
+            red: 4,
+            green: 2,
+            blue: 6
+        }
+        .power()
+    );
+}
+
+#[test]
+fn test_smallest_bag() {
+    assert_eq!(
+        CubeCounts {
+            red: 4,
+            green: 2,
+            blue: 6,
+        },
+        Game::parse_game("Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green").smallest_bag()
     );
 }
