@@ -1,8 +1,8 @@
 use lazy_static::lazy_static;
 use regex::{self, Regex};
-use std::{arch::is_aarch64_feature_detected, collections::HashMap, io};
+use std::{collections::HashMap, io};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Num {
     row: usize,
     start_col: usize,
@@ -36,62 +36,95 @@ impl Num {
     }
 }
 
-fn parse_symbol_columns(line: &str) -> Vec<usize> {
+fn parse_symbol_columns(line: &str) -> Vec<(usize, bool)> {
     SYMBOL_PATTERN
         .find_iter(line)
-        .map(|m| {
-            println!("{:?}", m);
-            m.start()
-        })
+        .map(|m| (m.start(), m.as_str() == "*"))
         .collect()
+}
+
+fn find_gears(row: usize, col: usize, nums: &HashMap<usize, Vec<Num>>) -> Option<(Num, Num)> {
+    let adjacent_nums: Vec<&Num> = (row.saturating_sub(1)..(row + 2))
+        .map(|num_row| match nums.get(&num_row) {
+            None => vec![],
+            Some(nums) => nums
+                .iter()
+                .filter(|num| num.is_adjacent(row, col))
+                .collect(),
+        })
+        .flatten()
+        .collect();
+    if adjacent_nums.len() == 2 {
+        Some((*adjacent_nums[0], *adjacent_nums[1]))
+    } else {
+        None
+    }
 }
 
 fn main() {
     let mut nums: Vec<Num> = Vec::new();
     let mut symbols_by_row: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut gear_symbols_by_row: HashMap<usize, Vec<usize>> = HashMap::new();
     let mut row = 0;
     for line in io::stdin().lines() {
         let line = line.expect("Read line");
+
         nums.append(&mut Num::parse_line(row, &line));
 
-        symbols_by_row.insert(row, parse_symbol_columns(&line));
+        symbols_by_row.insert(
+            row,
+            parse_symbol_columns(&line)
+                .iter()
+                .map(|(col, _)| *col)
+                .collect(),
+        );
+
+        gear_symbols_by_row.insert(
+            row,
+            parse_symbol_columns(&line)
+                .iter()
+                .filter(|(col, is_gear_symbol)| *is_gear_symbol)
+                .map(|(col, _)| *col)
+                .collect(),
+        );
+
         row += 1;
     }
 
-    println!("{:?}", nums);
-    println!("{:?}", symbols_by_row);
+    // println!("{:?}", nums);
+    // println!("{:?}", symbols_by_row);
+    // println!("{:?}", gear_symbols_by_row);
 
-    let nums_by_symbols = nums
-        .into_iter()
-        .filter(|n| {
-            (n.row > 0
-                && symbols_by_row
-                    .get(&(n.row - 1))
-                    .unwrap()
-                    .iter()
-                    .any(|c| n.is_adjacent(n.row - 1, *c)))
-                || symbols_by_row
-                    .get(&n.row)
-                    .unwrap()
-                    .iter()
-                    .any(|c| n.is_adjacent(n.row, *c))
-                || (symbols_by_row.contains_key(&(n.row + 1))
-                    && symbols_by_row
-                        .get(&(n.row + 1))
-                        .unwrap()
-                        .iter()
-                        .any(|c| n.is_adjacent(n.row + 1, *c)))
-        })
-        .map(|n| n.val)
-        .reduce(|acc, n| {
-            println!("adding {acc} + {n}");
-            acc + n
-        });
-    println!("{:?}", nums_by_symbols);
-    ()
-
-    // 538792 too high
     // 531932 is correct
+
+    let mut nums_by_row: HashMap<usize, Vec<Num>> = HashMap::new();
+    for num in nums {
+        if !nums_by_row.contains_key(&num.row) {
+            nums_by_row.insert(num.row, Vec::new());
+        }
+        nums_by_row.get_mut(&num.row).unwrap().push(num);
+    }
+
+    let gears: Option<Vec<(Num, Num)>> = gear_symbols_by_row
+        .iter()
+        .map(|(row, cols)| {
+            cols.iter()
+                .map(|col| find_gears(*row, *col, &nums_by_row))
+                .filter(|gears| gears.is_some())
+                .collect::<Vec<_>>()
+        })
+        .flatten()
+        .collect();
+
+    // println!("{:?}", gears);
+
+    let gear_ratios: usize = gears
+        .unwrap()
+        .iter()
+        .map(|(lhs, rhs)| lhs.val * rhs.val)
+        .sum();
+    println!("{gear_ratios}");
+    // 73646890 is correct
 }
 
 #[test]
